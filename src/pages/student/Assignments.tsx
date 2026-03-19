@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { uploadVideoSubmission } from '../../lib/supabase';
-import { Video, Clock, Mic, StopCircle } from 'lucide-react';
+import { Clock, Mic, StopCircle } from 'lucide-react';
 
 interface Assignment {
     id: number;

@@ -143,7 +143,6 @@ const Viewer: React.FC<{
 
                 <div style={{ flex: 1, overflowY: 'auto' }}>
                     {flat.map((item, i) => {
-                        const Icon = ICONS[item.mat.type];
                         const isActive = item.mat.id === mat.id;
                         const isDone = done.has(item.mat.id);
 

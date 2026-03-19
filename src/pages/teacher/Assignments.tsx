@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Plus, X, ChevronRight } from 'lucide-react';
+import { Plus, X, ChevronRight } from 'lucide-react';
 
 interface Question {
     id: number;

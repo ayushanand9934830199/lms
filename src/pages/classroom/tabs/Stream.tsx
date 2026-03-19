@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Send, Paperclip } from 'lucide-react';
-import type { Classroom } from '../../components/ClassroomDetail';
+import type { Classroom } from '../../../components/ClassroomDetail';
 
 interface Post { id: number; author: string; content: string; time: string; }
 
