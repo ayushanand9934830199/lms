@@ -68,15 +68,19 @@ const ActivityChart: React.FC<{ data: { label: string; value: number }[] }> = ({
 };
 
 /* ─── Main ────────────────────────────────────────────── */
-interface Props { role: 'teacher' | 'student'; name?: string; stats: { label: string; value: string | number }[]; }
+interface Props {
+    role: 'teacher' | 'student';
+    name?: string;
+    stats: { label: string; value: string | number }[];
+    chartData?: { label: string; value: number }[];
+}
 
-const DashboardHome: React.FC<Props> = ({ role, name = 'User', stats }) => {
+const DashboardHome: React.FC<Props> = ({ role, name = 'User', stats, chartData }) => {
     const [quoteIdx] = useState(() => Math.floor(Math.random() * QUOTES.length));
     const quote = QUOTES[quoteIdx];
 
-    const chartData = role === 'teacher'
-        ? [{ label: 'Mon', value: 4 }, { label: 'Tue', value: 7 }, { label: 'Wed', value: 3 }, { label: 'Thu', value: 9 }, { label: 'Fri', value: 6 }, { label: 'Sat', value: 2 }, { label: 'Sun', value: 5 }]
-        : [{ label: 'Wk1', value: 2 }, { label: 'Wk2', value: 5 }, { label: 'Wk3', value: 3 }, { label: 'Wk4', value: 7 }, { label: 'Wk5', value: 4 }, { label: 'Wk6', value: 8 }];
+    // Fallback if not provided yet
+    const finalChartData = chartData || [{ label: '-', value: 0 }];
 
     return (
         <div>
@@ -106,7 +110,7 @@ const DashboardHome: React.FC<Props> = ({ role, name = 'User', stats }) => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
                 <div className="card">
                     <p style={{ fontWeight: 700, marginBottom: '0.75rem' }}>{role === 'teacher' ? 'Submissions this week' : 'Assignments completed'}</p>
-                    <ActivityChart data={chartData} />
+                    <ActivityChart data={finalChartData} />
                 </div>
                 <StickyNotes />
             </div>
