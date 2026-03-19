@@ -42,7 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     // Map legacy roles if necessary
                     const r = data.role;
                     if (r === 'admin' || r === 'admissions_head') setRole('admin');
-                    else if (r === 'admissions_associate') setRole('teacher');
+                    else if (r === 'teacher' || r === 'admissions_associate') setRole('teacher');
                     else setRole('student');
                 } else if (mounted) {
                     setRole('student');
