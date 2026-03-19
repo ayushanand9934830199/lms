@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Phone, Linkedin, MoreVertical, Plus, X } from 'lucide-react';
+import { Phone, Linkedin, Plus, X } from 'lucide-react';
 
 interface Profile {
     id: string;
@@ -16,11 +16,16 @@ const AdminUsers: React.FC = () => {
     const [users, setUsers] = useState<Profile[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Modal state
     const [isAddingUser, setIsAddingUser] = useState(false);
+    const [isMassImporting, setIsMassImporting] = useState(false);
+    const [isChangingPw, setIsChangingPw] = useState<Profile | null>(null);
+
     const [newName, setNewName] = useState('');
     const [newEmail, setNewEmail] = useState('');
     const [newRole, setNewRole] = useState('student');
+    const [newPassword, setNewPassword] = useState('');
+    const [importEmails, setImportEmails] = useState('');
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
     const [submitSuccess, setSubmitSuccess] = useState('');
@@ -80,6 +85,51 @@ const AdminUsers: React.FC = () => {
         }, 800);
     };
 
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true); setSubmitError(''); setSubmitSuccess('');
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const res = await fetch('/api/changePassword', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+                body: JSON.stringify({ userId: isChangingPw?.id, newPassword })
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Failed to change password');
+
+            setSubmitSuccess('Password forcefully updated!');
+            setTimeout(() => { setIsChangingPw(null); setNewPassword(''); setIsSubmitting(false); setSubmitSuccess(''); }, 1500);
+        } catch (err: any) {
+            setSubmitError(err.message);
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleMassImport = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true); setSubmitError(''); setSubmitSuccess('');
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const emails = importEmails.split(/[\n,;]+/).map(i => i.trim()).filter(Boolean);
+
+            const res = await fetch('/api/massImport', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+                body: JSON.stringify({ emails, role: newRole })
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Failed to mass import');
+
+            setSubmitSuccess(`Successfully imported ${json.totalImported} users with password: ${json.defaultPassword}`);
+            fetchUsers();
+            setTimeout(() => { setIsMassImporting(false); setImportEmails(''); setIsSubmitting(false); setSubmitSuccess(''); }, 4000);
+        } catch (err: any) {
+            setSubmitError(err.message);
+            setIsSubmitting(false);
+        }
+    };
+
     if (loading) return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading live data...</div>;
 
     const roleColors: Record<string, string> = {
@@ -96,6 +146,13 @@ const AdminUsers: React.FC = () => {
                     <div className="text-sm" style={{ padding: '0.5rem 1rem', background: '#fff', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-sm)' }}>
                         <strong>{users.length}</strong> Total Registered
                     </div>
+                    <button
+                        className="btn btn-secondary"
+                        style={{ padding: '0.5rem 1rem' }}
+                        onClick={() => setIsMassImporting(true)}
+                    >
+                        Mass Import
+                    </button>
                     <button
                         className="btn btn-primary"
                         style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem' }}
@@ -140,7 +197,13 @@ const AdminUsers: React.FC = () => {
                                     {new Date(u.created_at).toLocaleDateString()}
                                 </td>
                                 <td style={{ padding: '0.875rem 1rem', textAlign: 'right' }}>
-                                    <button className="btn btn-ghost" style={{ padding: '0.25rem' }}><MoreVertical size={16} /></button>
+                                    <button
+                                        className="btn btn-secondary"
+                                        style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                                        onClick={() => setIsChangingPw(u)}
+                                    >
+                                        Change PW
+                                    </button>
                                 </td>
                             </tr>
                         ))}
@@ -197,6 +260,93 @@ const AdminUsers: React.FC = () => {
                                 <button type="button" className="btn btn-ghost" onClick={() => setIsAddingUser(false)} disabled={isSubmitting}>Cancel</button>
                                 <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
                                     {isSubmitting ? 'Creating...' : 'Send Invite'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Mass Import Modal */}
+            {isMassImporting && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
+                }}>
+                    <div style={{
+                        background: '#fff', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: '420px',
+                        boxShadow: 'var(--shadow-lg)'
+                    }}>
+                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <h3 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Mass Import Users</h3>
+                            <button className="btn btn-ghost" style={{ padding: '0.25rem' }} onClick={() => setIsMassImporting(false)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleMassImport} style={{ padding: '1.5rem' }}>
+                            {submitError && <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#fee2e2', color: '#b91c1c', borderRadius: 'var(--radius-sm)', fontSize: '0.875rem' }}>{submitError}</div>}
+                            {submitSuccess && <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#dcfce7', color: '#15803d', borderRadius: 'var(--radius-sm)', fontSize: '0.875rem' }}>{submitSuccess}</div>}
+
+                            <div className="field" style={{ marginBottom: '1rem' }}>
+                                <label className="label">Emails (Comma or Newline separated)</label>
+                                <textarea required className="input" rows={5} placeholder="student1@edu.com&#10;student2@edu.com" value={importEmails} onChange={e => setImportEmails(e.target.value)} disabled={isSubmitting} />
+                            </div>
+
+                            <div className="field" style={{ marginBottom: '1.5rem' }}>
+                                <label className="label">Target System Role</label>
+                                <select required className="input" value={newRole} onChange={e => setNewRole(e.target.value)} disabled={isSubmitting}>
+                                    <option value="student">Student</option>
+                                    <option value="teacher">Teacher</option>
+                                    <option value="admin">Administrator</option>
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                                <button type="button" className="btn btn-ghost" onClick={() => setIsMassImporting(false)} disabled={isSubmitting}>Cancel</button>
+                                <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                                    {isSubmitting ? 'Importing...' : 'Provision Accounts'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Change Password Modal */}
+            {isChangingPw && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
+                }}>
+                    <div style={{
+                        background: '#fff', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: '420px',
+                        boxShadow: 'var(--shadow-lg)'
+                    }}>
+                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <h3 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Change Password</h3>
+                            <button className="btn btn-ghost" style={{ padding: '0.25rem' }} onClick={() => setIsChangingPw(null)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleChangePassword} style={{ padding: '1.5rem' }}>
+                            {submitError && <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#fee2e2', color: '#b91c1c', borderRadius: 'var(--radius-sm)', fontSize: '0.875rem' }}>{submitError}</div>}
+                            {submitSuccess && <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#dcfce7', color: '#15803d', borderRadius: 'var(--radius-sm)', fontSize: '0.875rem' }}>{submitSuccess}</div>}
+
+                            <div style={{ marginBottom: '1.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                                Forcefully overwrite the credentials for <strong>{isChangingPw.email}</strong>. This bypasses email confirmations.
+                            </div>
+
+                            <div className="field" style={{ marginBottom: '1.5rem' }}>
+                                <label className="label">New Master Password</label>
+                                <input required type="text" className="input" placeholder="Secure Password" value={newPassword} onChange={e => setNewPassword(e.target.value)} disabled={isSubmitting} minLength={6} />
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                                <button type="button" className="btn btn-ghost" onClick={() => setIsChangingPw(null)} disabled={isSubmitting}>Cancel</button>
+                                <button type="submit" className="btn btn-primary" style={{ background: '#b91c1c', borderColor: '#b91c1c' }} disabled={isSubmitting}>
+                                    {isSubmitting ? 'Updating...' : 'Force Reset'}
                                 </button>
                             </div>
                         </form>
