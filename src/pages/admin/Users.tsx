@@ -50,39 +50,40 @@ const AdminUsers: React.FC = () => {
         setSubmitError('');
         setSubmitSuccess('');
 
-        // Generate a random temporary password for the invitee
-        const tempPassword = Math.random().toString(36).slice(-10) + 'A1!';
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const API_BASE = window.location.hostname === 'localhost' ? 'https://lms-rd.vercel.app' : '';
 
-        const { error: signUpError } = await supabase.auth.signUp({
-            email: newEmail,
-            password: tempPassword,
-            options: {
-                data: {
-                    full_name: newName,
-                    role: newRole
-                }
-            }
-        });
+            const res = await fetch(`${API_BASE}/api/massImport`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+                body: JSON.stringify({ emails: [newEmail], role: newRole })
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Failed to create user account');
 
-        if (signUpError) {
-            setSubmitError(signUpError.message);
-            setIsSubmitting(false);
-            return;
-        }
+            setSubmitSuccess(`User successfully provisioned with password: ${json.defaultPassword}`);
 
-        setSubmitSuccess('User invited successfully! They will receive a confirmation email.');
-        // Refresh the user list after a short delay for trigger to fire
-        setTimeout(() => {
-            fetchUsers();
-            setIsSubmitting(false);
-            setNewName('');
-            setNewEmail('');
-            setNewRole('student');
             setTimeout(() => {
-                setIsAddingUser(false);
-                setSubmitSuccess('');
-            }, 1500);
-        }, 800);
+                fetchUsers();
+                setIsSubmitting(false);
+                setNewName('');
+                setNewEmail('');
+                setNewRole('student');
+                setTimeout(() => {
+                    setIsAddingUser(false);
+                    setSubmitSuccess('');
+                }, 1500);
+            }, 800);
+        } catch (err: any) {
+            // Check for CORS errors masking Edge function failures
+            if (err.message.includes('Failed to fetch')) {
+                setSubmitError('Unable to securely reach the provisioning server from Localhost. Try testing on the live Vercel dashboard instead.');
+            } else {
+                setSubmitError(err.message);
+            }
+            setIsSubmitting(false);
+        }
     };
 
     const handleChangePassword = async (e: React.FormEvent) => {
