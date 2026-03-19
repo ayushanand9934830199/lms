@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Phone, Linkedin, MoreVertical } from 'lucide-react';
+import { Phone, Linkedin, MoreVertical, Plus, X } from 'lucide-react';
 
 interface Profile {
     id: string;
@@ -16,36 +16,93 @@ const AdminUsers: React.FC = () => {
     const [users, setUsers] = useState<Profile[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchUsers = async () => {
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .order('created_at', { ascending: false });
+    // Modal state
+    const [isAddingUser, setIsAddingUser] = useState(false);
+    const [newName, setNewName] = useState('');
+    const [newEmail, setNewEmail] = useState('');
+    const [newRole, setNewRole] = useState('student');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState('');
+    const [submitSuccess, setSubmitSuccess] = useState('');
 
-            if (!error && data) setUsers(data);
-            setLoading(false);
-        };
+    const fetchUsers = async () => {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (!error && data) setUsers(data);
+        setLoading(false);
+    };
+
+    useEffect(() => {
         fetchUsers();
     }, []);
+
+    const handleAddUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setSubmitError('');
+        setSubmitSuccess('');
+
+        // Generate a random temporary password for the invitee
+        const tempPassword = Math.random().toString(36).slice(-10) + 'A1!';
+
+        const { error: signUpError } = await supabase.auth.signUp({
+            email: newEmail,
+            password: tempPassword,
+            options: {
+                data: {
+                    full_name: newName,
+                    role: newRole
+                }
+            }
+        });
+
+        if (signUpError) {
+            setSubmitError(signUpError.message);
+            setIsSubmitting(false);
+            return;
+        }
+
+        setSubmitSuccess('User invited successfully! They will receive a confirmation email.');
+        // Refresh the user list after a short delay for trigger to fire
+        setTimeout(() => {
+            fetchUsers();
+            setIsSubmitting(false);
+            setNewName('');
+            setNewEmail('');
+            setNewRole('student');
+            setTimeout(() => {
+                setIsAddingUser(false);
+                setSubmitSuccess('');
+            }, 1500);
+        }, 800);
+    };
 
     if (loading) return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading live data...</div>;
 
     const roleColors: Record<string, string> = {
         'admin': 'badge-purple',
-        'admissions_head': 'badge-yellow',
-        'admissions_associate': 'badge-blue',
-        'applicant': 'badge-gray'
+        'teacher': 'badge-blue',
+        'student': 'badge-gray'
     };
 
     return (
         <div>
             <div className="flex items-center justify-between" style={{ marginBottom: '1.5rem' }}>
                 <h1 style={{ fontSize: '2rem' }}>Manage Users</h1>
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                     <div className="text-sm" style={{ padding: '0.5rem 1rem', background: '#fff', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-sm)' }}>
                         <strong>{users.length}</strong> Total Registered
                     </div>
+                    <button
+                        className="btn btn-primary"
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1rem' }}
+                        onClick={() => setIsAddingUser(true)}
+                    >
+                        <Plus size={16} /> Add User
+                    </button>
                 </div>
             </div>
 
@@ -95,6 +152,57 @@ const AdminUsers: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+
+            {/* Add User Modal */}
+            {isAddingUser && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
+                }}>
+                    <div style={{
+                        background: '#fff', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: '420px',
+                        boxShadow: 'var(--shadow-lg)'
+                    }}>
+                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <h3 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Create New User</h3>
+                            <button className="btn btn-ghost" style={{ padding: '0.25rem' }} onClick={() => setIsAddingUser(false)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleAddUser} style={{ padding: '1.5rem' }}>
+                            {submitError && <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#fee2e2', color: '#b91c1c', borderRadius: 'var(--radius-sm)', fontSize: '0.875rem' }}>{submitError}</div>}
+                            {submitSuccess && <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#dcfce7', color: '#15803d', borderRadius: 'var(--radius-sm)', fontSize: '0.875rem' }}>{submitSuccess}</div>}
+
+                            <div className="field" style={{ marginBottom: '1rem' }}>
+                                <label className="label">Full Name</label>
+                                <input required type="text" className="input" placeholder="John Doe" value={newName} onChange={e => setNewName(e.target.value)} disabled={isSubmitting} />
+                            </div>
+
+                            <div className="field" style={{ marginBottom: '1rem' }}>
+                                <label className="label">Email Address</label>
+                                <input required type="email" className="input" placeholder="john@example.edu" value={newEmail} onChange={e => setNewEmail(e.target.value)} disabled={isSubmitting} />
+                            </div>
+
+                            <div className="field" style={{ marginBottom: '1.5rem' }}>
+                                <label className="label">System Role</label>
+                                <select required className="input" value={newRole} onChange={e => setNewRole(e.target.value)} disabled={isSubmitting}>
+                                    <option value="student">Student</option>
+                                    <option value="teacher">Teacher</option>
+                                    <option value="admin">Administrator</option>
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                                <button type="button" className="btn btn-ghost" onClick={() => setIsAddingUser(false)} disabled={isSubmitting}>Cancel</button>
+                                <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                                    {isSubmitting ? 'Creating...' : 'Send Invite'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
