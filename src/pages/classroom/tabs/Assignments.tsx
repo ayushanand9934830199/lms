@@ -1,24 +1,16 @@
-import React, { useState } from 'react';
-import { Plus, Upload, Clock, X, CheckCircle, Video, Mic } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Plus, Upload, Clock, X, CheckCircle, Video, Mic, Trash2 } from 'lucide-react';
 import type { Classroom } from '../../../components/ClassroomDetail';
+import { supabase } from '../../../lib/supabase';
+import { useAuth } from '../../../context/AuthContext';
 
 interface VideoQuestion { id: number; question: string; timeSeconds: number; }
 interface Assignment {
-    id: number; title: string; description: string;
+    id: string; title: string; description: string;
     type: 'file_upload' | 'text' | 'video';
-    deadline: string; points: number; submissions: number; total: number;
+    deadline: string; points: number; submissions: number;
     questions?: VideoQuestion[];
 }
-
-const MOCK: Assignment[] = [
-    { id: 1, title: 'Research Essay — Nudge Theory', description: 'Submit your 1500-word essay on how nudge theory applies to public health campaigns.', type: 'file_upload', deadline: '2026-03-25', points: 100, submissions: 8, total: 22 },
-    {
-        id: 2, title: 'Video Reflection', description: 'Record a short video response to each question below.', type: 'video', deadline: '2026-03-28', points: 50, submissions: 3, total: 22, questions: [
-            { id: 1, question: 'Describe a moment when you experienced anchoring bias in daily life.', timeSeconds: 90 },
-            { id: 2, question: 'How would you design a nudge to improve recycling habits on campus?', timeSeconds: 120 },
-        ]
-    },
-];
 
 const TYPE_LABELS = { file_upload: 'File Upload', text: 'Text Response', video: 'Video Recording' };
 
@@ -60,7 +52,7 @@ const VideoRecorder: React.FC<{ question: VideoQuestion; onDone: () => void }> =
                     <video ref={videoRef} muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     {recording && (
                         <div style={{ position: 'absolute', top: '0.75rem', left: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(220,38,38,0.85)', borderRadius: 999, padding: '0.25rem 0.75rem' }}>
-                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', animation: 'pulse 1s infinite' }} />
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff' }} />
                             <span style={{ color: '#fff', fontWeight: 600, fontSize: '0.875rem' }}>{fmt(secs)}</span>
                         </div>
                     )}
@@ -90,13 +82,14 @@ const VideoRecorder: React.FC<{ question: VideoQuestion; onDone: () => void }> =
     );
 };
 
-const ClassroomAssignments: React.FC<{ classroom: Classroom; role: string }> = ({ role }) => {
-    const [assignments, setAssignments] = useState<Assignment[]>(MOCK);
+const ClassroomAssignments: React.FC<{ classroom: Classroom; role: string }> = ({ classroom, role }) => {
+    const { user } = useAuth();
+    const [assignments, setAssignments] = useState<Assignment[]>([]);
+    const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
     const [selected, setSelected] = useState<Assignment | null>(null);
     const [videoQIdx, setVideoQIdx] = useState(0);
 
-    // Create form state
     const [fTitle, setFTitle] = useState('');
     const [fDesc, setFDesc] = useState('');
     const [fType, setFType] = useState<'file_upload' | 'text' | 'video'>('file_upload');
@@ -104,19 +97,59 @@ const ClassroomAssignments: React.FC<{ classroom: Classroom; role: string }> = (
     const [fPts, setFPts] = useState(100);
     const [fQs, setFQs] = useState<VideoQuestion[]>([]);
 
-    // Student submission
     const [textSubmission, setTextSubmission] = useState('');
     const [fileSubmitted, setFileSubmitted] = useState(false);
     const [doneQs, setDoneQs] = useState<number[]>([]);
+
+    const fetchAssignments = async () => {
+        setLoading(true);
+        const { data } = await supabase
+            .from('assignments')
+            .select('id, title, deadline, type, questions_or_config, submissions(id)')
+            .eq('classroom_id', classroom.id)
+            .order('created_at', { ascending: false });
+
+        if (data) {
+            setAssignments(data.map((a: any) => ({
+                id: a.id,
+                title: a.title,
+                description: '',
+                type: a.type === 'video_interview' ? 'video' : 'file_upload',
+                deadline: a.deadline?.split('T')[0] || '',
+                points: 100,
+                submissions: a.submissions?.length || 0,
+                questions: Array.isArray(a.questions_or_config) ? a.questions_or_config : undefined,
+            })));
+        }
+        setLoading(false);
+    };
+
+    useEffect(() => { fetchAssignments(); }, [classroom.id]);
 
     const addQ = () => setFQs(qs => [...qs, { id: Date.now(), question: '', timeSeconds: 90 }]);
     const removeQ = (id: number) => setFQs(qs => qs.filter(q => q.id !== id));
     const updateQ = (id: number, patch: Partial<VideoQuestion>) => setFQs(qs => qs.map(q => q.id === id ? { ...q, ...patch } : q));
 
-    const create = () => {
-        if (!fTitle.trim()) return;
-        setAssignments(a => [...a, { id: Date.now(), title: fTitle, description: fDesc, type: fType, deadline: fDl, points: fPts, submissions: 0, total: 22, questions: fType === 'video' ? fQs : undefined }]);
-        setCreating(false); setFTitle(''); setFDesc(''); setFDl(''); setFPts(100); setFQs([]);
+    const create = async () => {
+        if (!fTitle.trim() || !user) return;
+        await supabase.from('assignments').insert({
+            title: fTitle,
+            deadline: fDl || null,
+            teacher_id: user.id,
+            classroom_id: classroom.id,
+            type: fType === 'video' ? 'video_interview' : 'file_upload',
+            questions_or_config: fType === 'video' ? fQs : null,
+        });
+        setCreating(false);
+        setFTitle(''); setFDesc(''); setFDl(''); setFPts(100); setFQs([]);
+        fetchAssignments();
+    };
+
+    const deleteAssignment = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm('Delete this assignment?')) return;
+        await supabase.from('assignments').delete().eq('id', id);
+        fetchAssignments();
     };
 
     /* ── Student video assignment view ── */
@@ -213,7 +246,7 @@ const ClassroomAssignments: React.FC<{ classroom: Classroom; role: string }> = (
             <div style={{ maxWidth: 800 }}>
                 <button className="btn btn-ghost" style={{ padding: '0.25rem 0', marginBottom: '1.25rem' }} onClick={() => setSelected(null)}>← Assignments</button>
                 <h2 style={{ fontSize: '1.375rem', marginBottom: '0.25rem' }}>{selected.title}</h2>
-                <p className="text-sm text-muted" style={{ marginBottom: '1rem' }}>Due {selected.deadline} · {selected.submissions}/{selected.total} submitted · {TYPE_LABELS[selected.type]}</p>
+                <p className="text-sm text-muted" style={{ marginBottom: '1rem' }}>Due {selected.deadline} · {selected.submissions} submitted · {TYPE_LABELS[selected.type]}</p>
                 {selected.questions && (
                     <div className="card" style={{ marginBottom: '1.25rem' }}>
                         <p style={{ fontWeight: 600, marginBottom: '0.75rem' }}>Video Questions ({selected.questions.length})</p>
@@ -296,24 +329,39 @@ const ClassroomAssignments: React.FC<{ classroom: Classroom; role: string }> = (
                 </div>
             )}
 
-            <div className="flex-col gap-3">
-                {assignments.map(a => (
-                    <div key={a.id} className="card flex items-center justify-between" style={{ cursor: 'pointer' }} onClick={() => { setSelected(a); setVideoQIdx(0); setDoneQs([]); }}>
-                        <div>
-                            <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>{a.title}</div>
-                            <div className="flex items-center gap-3" style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
-                                <span className="flex items-center gap-1"><Clock size={12} /> Due {a.deadline}</span>
-                                <span>{a.points} pts · {TYPE_LABELS[a.type]}</span>
-                                {a.questions && <span>{a.questions.length} questions</span>}
-                                {role === 'teacher' && <span>{a.submissions}/{a.total} submitted</span>}
+            {loading ? (
+                <div style={{ color: 'var(--text-muted)' }}>Loading assignments...</div>
+            ) : assignments.length === 0 ? (
+                <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    No assignments in this classroom yet.
+                </div>
+            ) : (
+                <div className="flex-col gap-3">
+                    {assignments.map(a => (
+                        <div key={a.id} className="card flex items-center justify-between" style={{ cursor: 'pointer' }} onClick={() => { setSelected(a); setVideoQIdx(0); setDoneQs([]); }}>
+                            <div>
+                                <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>{a.title}</div>
+                                <div className="flex items-center gap-3" style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
+                                    <span className="flex items-center gap-1"><Clock size={12} /> Due {a.deadline}</span>
+                                    <span>{a.points} pts · {TYPE_LABELS[a.type]}</span>
+                                    {a.questions && <span>{a.questions.length} questions</span>}
+                                    {role === 'teacher' && <span>{a.submissions} submitted</span>}
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className={`badge ${role === 'student' ? 'badge-yellow' : a.submissions > 0 ? 'badge-green' : 'badge-yellow'}`}>
+                                    {role === 'student' ? 'Pending' : a.submissions > 0 ? `${a.submissions} in` : 'Open'}
+                                </span>
+                                {role === 'teacher' && (
+                                    <button className="btn btn-ghost" style={{ padding: '0.25rem', color: '#dc2626' }} onClick={(e) => deleteAssignment(a.id, e)} title="Delete">
+                                        <Trash2 size={14} />
+                                    </button>
+                                )}
                             </div>
                         </div>
-                        <span className={`badge ${role === 'student' ? 'badge-yellow' : a.submissions === a.total ? 'badge-green' : 'badge-yellow'}`}>
-                            {role === 'student' ? 'Pending' : a.submissions === a.total ? 'All in' : 'Open'}
-                        </span>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 };
