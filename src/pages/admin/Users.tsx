@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Mail, Phone, Linkedin, MoreVertical } from 'lucide-react';
+import { Phone, Linkedin, MoreVertical } from 'lucide-react';
 
 interface Profile {
     id: string;

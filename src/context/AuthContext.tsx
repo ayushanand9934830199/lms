@@ -36,7 +36,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     return;
                 }
 
-                const { data, error } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
+                const { data } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
 
                 if (mounted && data?.role) {
                     // Map legacy roles if necessary
