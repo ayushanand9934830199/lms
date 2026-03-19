@@ -25,6 +25,7 @@ const Classrooms: React.FC<Props> = ({ role }) => {
     const [creating, setCreating] = useState(false);
     const [newName, setNewName] = useState('');
     const [newSec, setNewSec] = useState('');
+    const [createError, setCreateError] = useState('');
 
     const [copied, setCopied] = useState<'code' | 'link' | null>(null);
     const [inviteTarget, setInviteTarget] = useState<Classroom | null>(null);
@@ -34,7 +35,7 @@ const Classrooms: React.FC<Props> = ({ role }) => {
         const { data, error } = await supabase
             .from('classrooms')
             .select(`
-                id, name, section, join_code, 
+                id, name, section, code, 
                 profiles!classrooms_teacher_id_fkey(full_name),
                 classroom_members(id)
             `)
@@ -46,7 +47,7 @@ const Classrooms: React.FC<Props> = ({ role }) => {
                 id: c.id,
                 name: c.name,
                 section: c.section || '',
-                code: c.join_code,
+                code: c.code,
                 students: c.classroom_members?.length || 0,
                 teacher: c.profiles?.full_name || 'Professor'
             }));
@@ -60,12 +61,13 @@ const Classrooms: React.FC<Props> = ({ role }) => {
 
     const create = async () => {
         if (!newName.trim() || !user) return;
-        const code = generateCode();
+        setCreateError('');
+        const generatedCode = generateCode();
 
         const { error } = await supabase.from('classrooms').insert({
             name: newName,
             section: newSec,
-            join_code: code,
+            code: generatedCode,
             teacher_id: user.id
         });
 
@@ -73,6 +75,8 @@ const Classrooms: React.FC<Props> = ({ role }) => {
             setNewName(''); setNewSec('');
             setCreating(false);
             fetchClassrooms();
+        } else {
+            setCreateError(error.message);
         }
     };
 
@@ -103,6 +107,7 @@ const Classrooms: React.FC<Props> = ({ role }) => {
                     <div className="card" style={{ width: 420, position: 'relative' }}>
                         <button className="btn btn-ghost" style={{ position: 'absolute', top: '1rem', right: '1rem', padding: '0.25rem' }} onClick={() => setCreating(false)}><X size={16} /></button>
                         <h3 style={{ fontWeight: 700, fontSize: '1.25rem', marginBottom: '1.5rem' }}>Create Classroom</h3>
+                        {createError && <div style={{ padding: '0.75rem', background: '#fee2e2', color: '#b91c1c', borderRadius: 'var(--radius-sm)', fontSize: '0.875rem', marginBottom: '1.25rem' }}>{createError}</div>}
                         <div className="field"><label className="label">Name *</label><input className="input" placeholder="e.g. Behavioral Economics 2026" value={newName} onChange={e => setNewName(e.target.value)} /></div>
                         <div className="field" style={{ marginBottom: '1.5rem' }}><label className="label">Section (optional)</label><input className="input" placeholder="e.g. Batch A" value={newSec} onChange={e => setNewSec(e.target.value)} /></div>
                         <div className="flex gap-3 justify-end">

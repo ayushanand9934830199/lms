@@ -23,7 +23,7 @@ const StudentClassrooms: React.FC = () => {
             .from('classroom_members')
             .select(`
                 classrooms!inner (
-                    id, name, section, join_code,
+                    id, name, section, code,
                     profiles!classrooms_teacher_id_fkey(full_name),
                     classroom_members(id)
                 )
@@ -37,7 +37,7 @@ const StudentClassrooms: React.FC = () => {
                     id: c.id,
                     name: c.name,
                     section: c.section || '',
-                    code: c.join_code,
+                    code: c.code,
                     students: c.classroom_members?.length || 0,
                     teacher: c.profiles?.full_name || 'Professor'
                 };
@@ -59,7 +59,7 @@ const StudentClassrooms: React.FC = () => {
         const { data: targetClass, error: findErr } = await supabase
             .from('classrooms')
             .select('id')
-            .eq('join_code', joinCode)
+            .eq('code', joinCode)
             .maybeSingle();
 
         if (findErr || !targetClass) {
