@@ -31,23 +31,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const fetchRole = async (userId: string, email?: string) => {
             try {
-                // Hardcode fallback for the master admin account to prevent lockout
                 if (email === 'ayushhaanand@gmail.com') {
                     if (mounted) setRole('admin');
                     return;
                 }
 
-                // Attempt to fetch from 'users' table, then 'User' table if case-sensitive
-                let { data, error } = await supabase.from('users').select('role').eq('id', userId).maybeSingle();
-                if (error || !data) {
-                    const res2 = await supabase.from('User').select('role').eq('id', userId).maybeSingle();
-                    data = res2.data;
-                }
+                const { data, error } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
 
                 if (mounted && data?.role) {
-                    setRole(data.role as any);
+                    // Map legacy roles if necessary
+                    const r = data.role;
+                    if (r === 'admin' || r === 'admissions_head') setRole('admin');
+                    else if (r === 'admissions_associate') setRole('teacher');
+                    else setRole('student');
                 } else if (mounted) {
-                    // Default fallback if no role found
                     setRole('student');
                 }
             } catch (err) {
