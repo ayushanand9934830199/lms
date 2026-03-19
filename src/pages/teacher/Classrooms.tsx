@@ -1,34 +1,79 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Plus, Copy, Link2, Users, ChevronRight, X, Mail } from 'lucide-react';
-import ClassroomDetail, { type Classroom } from '../../components/ClassroomDetail';
+import ClassroomDetail from '../../components/ClassroomDetail';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
 
 const generateCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
 
-
 interface Props { role: 'teacher' | 'student'; }
 
-
-const INITIAL: Classroom[] = [
-    { id: '1', name: 'Economics Batch A', section: '2026', code: 'ECN4X2', students: 22, teacher: 'Prof. Mehta' },
-    { id: '2', name: 'Policy Workshop', section: 'Elective', code: 'PLY9K1', students: 14, teacher: 'Prof. Mehta' },
-];
+export interface Classroom {
+    id: string;
+    name: string;
+    section: string;
+    code: string;
+    students: number;
+    teacher: string;
+}
 
 const Classrooms: React.FC<Props> = ({ role }) => {
-    const [classrooms, setClassrooms] = useState<Classroom[]>(INITIAL);
+    const { user } = useAuth();
+    const [classrooms, setClassrooms] = useState<Classroom[]>([]);
+
     const [selected, setSelected] = useState<Classroom | null>(null);
     const [creating, setCreating] = useState(false);
     const [newName, setNewName] = useState('');
     const [newSec, setNewSec] = useState('');
+
     const [copied, setCopied] = useState<'code' | 'link' | null>(null);
     const [inviteTarget, setInviteTarget] = useState<Classroom | null>(null);
 
-    const create = () => {
-        if (!newName.trim()) return;
-        const c: Classroom = { id: String(Date.now()), name: newName, section: newSec, code: generateCode(), students: 0, teacher: 'Prof. Mehta' };
-        setClassrooms(p => [...p, c]);
-        setNewName(''); setNewSec('');
-        setCreating(false);
-        setSelected(c);
+    const fetchClassrooms = async () => {
+        if (!user) return;
+        const { data, error } = await supabase
+            .from('classrooms')
+            .select(`
+                id, name, section, join_code, 
+                profiles!classrooms_teacher_id_fkey(full_name),
+                classroom_members(id)
+            `)
+            .eq('teacher_id', user.id)
+            .order('created_at', { ascending: false });
+
+        if (!error && data) {
+            const parsed = data.map((c: any) => ({
+                id: c.id,
+                name: c.name,
+                section: c.section || '',
+                code: c.join_code,
+                students: c.classroom_members?.length || 0,
+                teacher: c.profiles?.full_name || 'Professor'
+            }));
+            setClassrooms(parsed);
+        }
+    };
+
+    useEffect(() => {
+        fetchClassrooms();
+    }, [user]);
+
+    const create = async () => {
+        if (!newName.trim() || !user) return;
+        const code = generateCode();
+
+        const { error } = await supabase.from('classrooms').insert({
+            name: newName,
+            section: newSec,
+            join_code: code,
+            teacher_id: user.id
+        });
+
+        if (!error) {
+            setNewName(''); setNewSec('');
+            setCreating(false);
+            fetchClassrooms();
+        }
     };
 
     const copy = (text: string, type: 'code' | 'link') => {
