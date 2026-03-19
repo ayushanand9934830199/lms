@@ -1,16 +1,19 @@
 import React from 'react';
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Video, Mail, Users, Settings, LogOut, BookOpen, School } from 'lucide-react';
 import { AppWidgetProvider } from '../context/AppWidgetContext';
 import PomodoroWidget from './PomodoroWidget';
 import YouTubeWidget from './YouTubeWidget';
+import { useAuth } from '../context/AuthContext';
 
 const Layout: React.FC = () => {
     const location = useLocation();
-    const isAdmin = location.pathname.startsWith('/admin');
-    const isTeacher = location.pathname.startsWith('/teacher');
-    const isStudent = !isAdmin && !isTeacher;
-    const role = isAdmin ? 'admin' : isTeacher ? 'teacher' : 'student';
+    const navigate = useNavigate();
+    const { role, signOut, user } = useAuth();
+
+    const isAdmin = role === 'admin';
+    const isTeacher = role === 'teacher';
+    const isStudent = role === 'student';
 
     // Home pages — widgets shown inline there, not as floating pills
     const isHome = location.pathname === '/teacher' ||
@@ -81,9 +84,11 @@ const Layout: React.FC = () => {
                         <NavLink to={`/${role}/settings`} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`} style={{ padding: '0.4rem 0.7rem' }}>
                             <Settings size={15} /> Settings
                         </NavLink>
-                        <div className="avatar" title="Your account">A</div>
+                        <div className="avatar" title={user?.email || 'Your account'}>
+                            {user?.email?.[0].toUpperCase() || 'A'}
+                        </div>
                         <button className="btn btn-ghost" style={{ border: 'none', padding: '0.4rem' }}
-                            onClick={() => window.location.href = '/'} title="Sign Out">
+                            onClick={async () => { await signOut(); navigate('/'); }} title="Sign Out">
                             <LogOut size={16} />
                         </button>
                     </div>
